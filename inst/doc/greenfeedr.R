@@ -5,6 +5,7 @@ knitr::opts_chunk$set(
 )
 
 ## ----setup--------------------------------------------------------------------
+#install.packages("greenfeedr")
 library(greenfeedr)
 
 ## ----download data------------------------------------------------------------

@@ -1,5 +1,7 @@
-# greenfeedr 1.0.0
+# greenfeedr 1.0.1
 
-# greenfeedr 0.1.0
+* Fixed bugs
+
+# greenfeedr 1.0.0
 
 * Initial CRAN submission.
