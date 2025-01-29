@@ -1,15 +1,16 @@
 #' @name process_gfdata
-#' @title Process Daily and Finalized 'GreenFeed' Data
+#' @title Process Preliminary and Finalized 'GreenFeed' Data
 #'
 #' @description Processes and calculates daily and weekly averages of 'GreenFeed' data.
 #'     Handles data filtering, aggregation, and summarization to facilitate further analysis.
 #'
-#' @param data a data frame with daily or finalized 'GreenFeed' data
+#' @param data a data frame with preliminary or finalized 'GreenFeed' data
 #' @param start_date a character string representing the start date of the study (format: "mm/dd/yyyy")
 #' @param end_date a character string representing the end date of the study (format: "mm/dd/yyyy")
 #' @param param1 an integer representing the number of records per day to be consider for analysis
 #' @param param2 an integer representing the number of days with records per week to be consider for analysis
-#' @param min_time an integer representing the minimum number of minutes for a records to be consider for analysis. By default min_time is 2
+#' @param min_time an integer representing the minimum number of minutes for a records to be consider for analysis (default: 2 minutes)
+#' @param cutoff an integer specifying the range for identifying outliers (default: 3 SD)
 #'
 #' @return A list of two data frames:
 #'   \item{daily_data }{data frame with daily processed 'GreenFeed' data}
@@ -43,7 +44,7 @@ utils::globalVariables(c(
 ))
 
 process_gfdata <- function(data, start_date, end_date,
-                           param1, param2, min_time = 2) {
+                           param1, param2, min_time = 2, cutoff = 3) {
   # Check date format
   start_date <- ensure_date_format(start_date)
   end_date <- ensure_date_format(end_date)
@@ -57,7 +58,7 @@ process_gfdata <- function(data, start_date, end_date,
 
   # Function to read and process each file
   process_data <- function(data) {
-    if (ncol(data) >= 25) {
+    if (ncol(data) >= 25) { # Preliminary data always have 25 columns or more
       names(data)[1:14] <- c(
         "RFID",
         "AnimalName",
@@ -76,10 +77,11 @@ process_gfdata <- function(data, start_date, end_date,
       )
 
       data <- data %>%
-        ## Remove leading zeros from RFID col to match with IDs
+        ## Remove leading zeros from RFID column to match with IDs
         dplyr::mutate(RFID = gsub("^0+", "", RFID)) %>%
-        ## Remove records with unknown ID and negative values.
-        dplyr::filter(RFID != "unknown") %>%
+        ## Remove records with unknown ID and airflow below 25 l/s (threshold value recommended by C-Lock Inc.)
+        dplyr::filter(RFID != "unknown",
+                      AirflowLitersPerSec >= 25) %>%
         ## Mark records with invalid gas values as NA, instead of removing them
         dplyr::mutate(
           CH4GramsPerDay = ifelse(CH4GramsPerDay <= 0, NA, CH4GramsPerDay),
@@ -87,17 +89,18 @@ process_gfdata <- function(data, start_date, end_date,
           O2GramsPerDay = ifelse(O2GramsPerDay <= 0, NA, O2GramsPerDay),
           H2GramsPerDay = ifelse(H2GramsPerDay <= 0, NA, H2GramsPerDay)
         ) %>%
-        ## Convert EndTime to date and modify GoodDataDuration
+        ## Change format of 'StartTime' and 'GoodDataDuration' columns
         dplyr::mutate(
-          day = as.Date(EndTime),
-
+          day = as.Date(StartTime),
           ## Suppress warnings from coercion issues with GoodDataDuration
           GoodDataDuration = suppressWarnings(
             case_when(
-              nchar(GoodDataDuration) == 8 ~ as.numeric(substr(GoodDataDuration, 1, 2)) * 60 + # HH:MM:SS format
+              # HH:MM:SS format
+              nchar(GoodDataDuration) == 8 ~ as.numeric(substr(GoodDataDuration, 1, 2)) * 60 +
                 as.numeric(substr(GoodDataDuration, 4, 5)) +
                 as.numeric(substr(GoodDataDuration, 7, 8)) / 60,
-              nchar(GoodDataDuration) > 8 ~ as.numeric(substr(GoodDataDuration, 12, 13)) * 60 + # YYYY-MM-DD HH:MM:SS format
+              # YYYY-MM-DD HH:MM:SS format
+              nchar(GoodDataDuration) > 8 ~ as.numeric(substr(GoodDataDuration, 12, 13)) * 60 +
                 as.numeric(substr(GoodDataDuration, 15, 16)) +
                 as.numeric(substr(GoodDataDuration, 18, 19)) / 60,
               TRUE ~ NA_real_
@@ -105,7 +108,7 @@ process_gfdata <- function(data, start_date, end_date,
           ),
           GoodDataDuration = round(GoodDataDuration, 2)
         )
-    } else {
+    } else { # Finalized data always have less than 21 columns
       names(data) <- c(
         "FeederID",
         "AnimalName",
@@ -131,10 +134,11 @@ process_gfdata <- function(data, start_date, end_date,
       )
 
       data <- data %>%
-        ## Remove "unknown IDs" and leading zeros from RFID col
+        ## Remove leading zeros from RFID column to match with IDs
         dplyr::mutate(RFID = gsub("^0+", "", RFID)) %>%
-        ## Remove records with unknown ID and negative values.
-        dplyr::filter(RFID != "unknown") %>%
+        ## Remove records with unknown ID and airflow below 25 l/s (threshold value recommended by C-Lock Inc.)
+        dplyr::filter(RFID != "unknown",
+                      AirflowLitersPerSec >= 25) %>%
         ## Mark records with invalid gas values as NA, instead of removing them
         dplyr::mutate(
           CH4GramsPerDay = ifelse(CH4GramsPerDay <= 0, NA, CH4GramsPerDay),
@@ -168,13 +172,13 @@ process_gfdata <- function(data, start_date, end_date,
   # Combine files into one data frame
   df <- process_data(data)
 
-  # Computing daily production of gases
+  # Calculation of average daily gas production
   daily_df <- df %>%
     ## Filter by conditions where CH4 and CO2 must be within range, but allow O2 and H2 to be NA
     dplyr::filter(
       dplyr::if_all(
         c(CH4GramsPerDay, CO2GramsPerDay),
-        ~ filter_within_range(.x, 2.5)
+        ~ filter_within_range(.x, cutoff)
       ),
 
       ## Retain records with valid CH4 and CO2, even if O2 or H2 are NA
@@ -206,7 +210,7 @@ process_gfdata <- function(data, start_date, end_date,
     ## Select columns
     dplyr::select(RFID, week, day, n, minutes, CH4GramsPerDay, CO2GramsPerDay, O2GramsPerDay, H2GramsPerDay)
 
-  # Computing weekly production of gases
+  # Calculation of average weekly gas production
   weekly_df <- daily_df %>%
     ## Group by animal and week
     dplyr::group_by(RFID, week) %>%

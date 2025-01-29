@@ -1,7 +1,7 @@
 Package: greenfeedr
 Type: Package
 Title: Process and Report 'GreenFeed' Data
-Version: 1.0.1
+Version: 1.1.0
 Authors@R: 
   c(
     person("Guillermo", "Martinez-Boggio", 
@@ -30,10 +30,10 @@ URL: https://gmbog.github.io/greenfeedr/,
         https://github.com/GMBog/greenfeedr
 VignetteBuilder: knitr
 NeedsCompilation: no
-Packaged: 2024-10-27 10:36:47 UTC; GuillermoMartinez
+Packaged: 2025-01-29 20:30:37 UTC; GuillermoMartinez
 Author: Guillermo Martinez-Boggio [cre, aut, cph]
     (<https://orcid.org/0000-0003-3597-9426>),
   Meredith Harrison [ctb],
   Patrick Lutz [ctb]
 Repository: CRAN
-Date/Publication: 2024-10-31 10:00:02 UTC
+Date/Publication: 2025-01-29 21:40:02 UTC

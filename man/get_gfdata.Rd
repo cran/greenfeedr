@@ -2,7 +2,7 @@
 % Please edit documentation in R/get_gfdata.R
 \name{get_gfdata}
 \alias{get_gfdata}
-\title{Download Daily 'GreenFeed' Data via 'API'}
+\title{Download Preliminary 'GreenFeed' Data via 'API'}
 \usage{
 get_gfdata(
   user,
@@ -30,25 +30,26 @@ get_gfdata(
 \item{save_dir}{a character string representing the directory to save the output file}
 }
 \value{
-A CSV file with daily 'GreenFeed' data in the specified directory
+A CSV file with preliminary 'GreenFeed' data in the specified directory
 }
 \description{
-Downloads daily 'GreenFeed' data from the 'C-Lock Inc.' server via an 'API'.
+Downloads preliminary 'GreenFeed' data from the 'C-Lock Inc.' server via an 'API'.
     Retrieves data based on specified parameters (login, date range, and units), and
-    provides a CSV file with the 'GreenFeed' daily data.
+    provides a CSV file with the 'GreenFeed' preliminary data.
 }
 \examples{
 \dontshow{if (has_credentials()) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
 # Please replace "your_username" and "your_password" with your actual 'GreenFeed' credentials.
-user <- Sys.getenv("API_USER")
-pass <- Sys.getenv("API_PASS")
-exp <- "StudyName"
-start_date <- "2024-01-01"
-end_date <- Sys.Date()
-save_dir <- tempdir()
-
 # Example with units as a vector
-unit <- c(304, 305)
-get_gfdata(user, pass, exp, unit, start_date, end_date, save_dir)
+
+get_gfdata(
+   user = "your_username",
+   pass = "your_password",
+   exp = "StudyName",
+   unit = c(304, 305),
+   start_date = "2024-01-01",
+   end_date = Sys.Date(),
+   save_dir = tempdir()
+   )
 \dontshow{\}) # examplesIf}
 }
