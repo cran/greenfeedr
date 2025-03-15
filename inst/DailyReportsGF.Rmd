@@ -2,6 +2,8 @@
 title: "GreenFeed Daily Data Report"
 date: "`r format(Sys.Date(), '%Y-%m-%d')`"
 output: pdf_document
+header-includes:
+  - \let\theHfootnote\relax
 ---
 
 ```{r libraries, include=FALSE}
@@ -25,7 +27,7 @@ library(stringr)
 
 ```{r Summary, message=FALSE, echo=FALSE}
 if (!is.null(rfid_file) && is.data.frame(rfid_file) && nrow(rfid_file) > 0) {
-  kbl(rfid_file, "simple")
+  kableExtra::kbl(rfid_file, "simple")
 } else {
   message("The 'rfid_file' is not provided.")
 }

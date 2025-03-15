@@ -356,7 +356,7 @@ you how to apply them to data frames.</p>
 <div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="co"># install.packages(&quot;greenfeedr&quot;)</span></span>
 <span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="fu">library</span>(greenfeedr)</span>
 <span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a><span class="co">#&gt; Thank you for using the greenfeedr package!</span></span>
-<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a><span class="co">#&gt; Cite: Martinez-Boggio et al. (2024). Greenfeedr: an R-package for processing and reporting GreenFeed data.</span></span>
+<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a><span class="co">#&gt; Cite: Martinez-Boggio et al. (2025). Greenfeedr: An R-package for processing and reporting GreenFeed data.</span></span>
 <span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a><span class="co">#&gt; Type &#39;help(greenfeedr)&#39; for summary information</span></span></code></pre></div>
 <div id="download-data-with-get_gfdata" class="section level2">
 <h2>Download data with <code>get_gfdata()</code></h2>
@@ -540,22 +540,357 @@ direction.</p>
 </div>
 <div id="process-data-with-process_gfdata" class="section level2">
 <h2>Process data with <code>process_gfdata()</code></h2>
-<p>It is finally time to process your GreenFeed data for analysis. The
-most frequently asked questions are:</p>
+<div id="using-process_gfdata" class="section level4">
+<h4>Using process_gfdata()</h4>
+<p>Before proceeding with analysis, it’s useful to summarize key aspects
+of the dataset:</p>
 <ul>
-<li>What is the minimum acceptable time that my records should
-last?</li>
-<li>How many records should I have per day?</li>
-<li>How many days with records should I keep per week?</li>
+<li>Total number of records</li>
+<li>Records per day</li>
+<li>Days with records per week</li>
+<li>Weeks with records</li>
 </ul>
-<p>However, since there is no single answer, these values will depend on
-many factors such as the duration of the study, number of animals,
-feeding, time of year, etc.</p>
-<p>The <code>process_gfdata()</code> function allows you to explore your
-data and use different sets of parameters (param1, param2, and min_time)
-and check how many records and animals you keep for analysis. To do that
-you can follow the example in the <a href="https://github.com/GMBog/greenfeedr/blob/main/README.md">README
-file</a></p>
+<p>To analyze the data effectively, we will use
+<code>process_gfdata()</code>, which requires three arguments:</p>
+<ul>
+<li><strong><code>param1</code></strong> is the number of records per
+day.
+<ul>
+<li>This parameter controls the minimum number of records that must be
+present for each day in the dataset to be considered valid.</li>
+</ul></li>
+<li><strong><code>param2</code></strong> is the number of days with
+records per week.
+<ul>
+<li>This parameter ensures that a minimum number of days within a week
+have valid records to be included in the analysis.</li>
+</ul></li>
+<li><strong><code>min_time</code></strong> is the minimum duration of a
+record.
+<ul>
+<li>This parameter specifies the minimum time threshold for each record
+to be considered valid.</li>
+</ul></li>
+</ul>
+<p>To determine the best-fitting parameters for our dataset, we will use
+the <code>eval_param()</code> function.</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="co"># Define the parameter space for param1 (i), param2 (j), and min_time (k):</span></span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a>i <span class="ot">&lt;-</span> <span class="fu">seq</span>(<span class="dv">1</span>, <span class="dv">6</span>)</span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a>j <span class="ot">&lt;-</span> <span class="fu">seq</span>(<span class="dv">1</span>, <span class="dv">7</span>)</span>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a>k <span class="ot">&lt;-</span> <span class="fu">seq</span>(<span class="dv">2</span>, <span class="dv">6</span>)</span>
+<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a></span>
+<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a><span class="co"># Generate all combinations of i, j, and k</span></span>
+<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a>param_combinations <span class="ot">&lt;-</span> <span class="fu">expand.grid</span>(<span class="at">param1 =</span> i, <span class="at">param2 =</span> j, <span class="at">min_time =</span> k)</span></code></pre></div>
+<p>In total, we have 210 different parameter combinations to
+evaluate.</p>
+<p>The next step is to evaluate the <code>process_gfdata()</code>
+function with the set of parameters we defined. The function can accept
+either a file path to the data files or the data as a data frame.</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a>finaldata <span class="ot">&lt;-</span> readxl<span class="sc">::</span><span class="fu">read_excel</span>(<span class="fu">system.file</span>(<span class="st">&quot;extdata&quot;</span>, <span class="st">&quot;StudyName_FinalReport.xlsx&quot;</span>, <span class="at">package =</span> <span class="st">&quot;greenfeedr&quot;</span>))</span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a></span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a>data <span class="ot">&lt;-</span> <span class="fu">eval_gfparam</span>(<span class="at">data =</span> finaldata,</span>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a>                     <span class="at">start_date =</span> <span class="st">&quot;2024-05-13&quot;</span>,</span>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a>                     <span class="at">end_date =</span> <span class="st">&quot;2024-05-25&quot;</span></span>
+<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a>                     )</span></code></pre></div>
+<p>After evaluating the function, the results will be placed into a data
+frame with the following structure:</p>
+<table style="font-size: 12px;">
+<thead>
+<tr>
+<th style="text-align:right;">
+param1
+</th>
+<th style="text-align:right;">
+param2
+</th>
+<th style="text-align:right;">
+min_time
+</th>
+<th style="text-align:right;">
+records
+</th>
+<th style="text-align:right;">
+N
+</th>
+<th style="text-align:right;">
+mean
+</th>
+<th style="text-align:right;">
+SD
+</th>
+<th style="text-align:right;">
+CV
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:right;">
+1
+</td>
+<td style="text-align:right;">
+1
+</td>
+<td style="text-align:right;">
+2
+</td>
+<td style="text-align:right;">
+45
+</td>
+<td style="text-align:right;">
+25
+</td>
+<td style="text-align:right;">
+385.0
+</td>
+<td style="text-align:right;">
+65.2
+</td>
+<td style="text-align:right;">
+16.93
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+2
+</td>
+<td style="text-align:right;">
+1
+</td>
+<td style="text-align:right;">
+2
+</td>
+<td style="text-align:right;">
+36
+</td>
+<td style="text-align:right;">
+20
+</td>
+<td style="text-align:right;">
+380.7
+</td>
+<td style="text-align:right;">
+64.6
+</td>
+<td style="text-align:right;">
+16.98
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+3
+</td>
+<td style="text-align:right;">
+1
+</td>
+<td style="text-align:right;">
+2
+</td>
+<td style="text-align:right;">
+30
+</td>
+<td style="text-align:right;">
+18
+</td>
+<td style="text-align:right;">
+381.8
+</td>
+<td style="text-align:right;">
+75.3
+</td>
+<td style="text-align:right;">
+19.71
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+4
+</td>
+<td style="text-align:right;">
+1
+</td>
+<td style="text-align:right;">
+2
+</td>
+<td style="text-align:right;">
+20
+</td>
+<td style="text-align:right;">
+14
+</td>
+<td style="text-align:right;">
+384.1
+</td>
+<td style="text-align:right;">
+87.6
+</td>
+<td style="text-align:right;">
+22.82
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+5
+</td>
+<td style="text-align:right;">
+1
+</td>
+<td style="text-align:right;">
+2
+</td>
+<td style="text-align:right;">
+14
+</td>
+<td style="text-align:right;">
+11
+</td>
+<td style="text-align:right;">
+352.2
+</td>
+<td style="text-align:right;">
+87.7
+</td>
+<td style="text-align:right;">
+24.91
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+1
+</td>
+<td style="text-align:right;">
+2
+</td>
+<td style="text-align:right;">
+2
+</td>
+<td style="text-align:right;">
+43
+</td>
+<td style="text-align:right;">
+24
+</td>
+<td style="text-align:right;">
+381.9
+</td>
+<td style="text-align:right;">
+63.5
+</td>
+<td style="text-align:right;">
+16.62
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+2
+</td>
+<td style="text-align:right;">
+2
+</td>
+<td style="text-align:right;">
+2
+</td>
+<td style="text-align:right;">
+27
+</td>
+<td style="text-align:right;">
+16
+</td>
+<td style="text-align:right;">
+389.8
+</td>
+<td style="text-align:right;">
+63.0
+</td>
+<td style="text-align:right;">
+16.15
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+3
+</td>
+<td style="text-align:right;">
+2
+</td>
+<td style="text-align:right;">
+2
+</td>
+<td style="text-align:right;">
+21
+</td>
+<td style="text-align:right;">
+16
+</td>
+<td style="text-align:right;">
+376.7
+</td>
+<td style="text-align:right;">
+68.3
+</td>
+<td style="text-align:right;">
+18.13
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+4
+</td>
+<td style="text-align:right;">
+2
+</td>
+<td style="text-align:right;">
+2
+</td>
+<td style="text-align:right;">
+10
+</td>
+<td style="text-align:right;">
+8
+</td>
+<td style="text-align:right;">
+354.8
+</td>
+<td style="text-align:right;">
+61.3
+</td>
+<td style="text-align:right;">
+17.27
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+5
+</td>
+<td style="text-align:right;">
+2
+</td>
+<td style="text-align:right;">
+2
+</td>
+<td style="text-align:right;">
+5
+</td>
+<td style="text-align:right;">
+5
+</td>
+<td style="text-align:right;">
+358.1
+</td>
+<td style="text-align:right;">
+44.5
+</td>
+<td style="text-align:right;">
+12.43
+</td>
+</tr>
+</tbody>
+</table>
+<p>This will give users a sense of how the data is filtered based on the
+chosen parameters. A more conservative approach (i.e., stricter
+parameters) will typically result in fewer retained records and
+animals.</p>
+</div>
 </div>
 <div id="process-pellet-intakes-and-visits-with-pellin-and-viseat" class="section level2">
 <h2>Process pellet intakes and visits with <code>pellin()</code> and
@@ -573,31 +908,31 @@ them as a list of files.</p>
 <p>Note that you should include the result obtained from the 10-drops
 test. If units have different gram values, define ‘gcup’ as a vector
 with an element for each unit.</p>
-<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a>file <span class="ot">&lt;-</span> <span class="fu">list</span>(<span class="fu">system.file</span>(<span class="st">&quot;extdata&quot;</span>, <span class="st">&quot;feedtimes.csv&quot;</span>, <span class="at">package =</span> <span class="st">&quot;greenfeedr&quot;</span>))</span>
-<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a></span>
-<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a>result <span class="ot">&lt;-</span> <span class="fu">pellin</span>(</span>
-<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a>  <span class="at">file_path =</span> file,</span>
-<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a>  <span class="at">unit =</span> <span class="dv">1</span>,</span>
-<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a>  <span class="at">gcup =</span> <span class="dv">34</span>,</span>
-<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a>  <span class="at">start_date =</span> <span class="st">&quot;2024-05-13&quot;</span>,</span>
-<span id="cb4-8"><a href="#cb4-8" tabindex="-1"></a>  <span class="at">end_date =</span> <span class="st">&quot;2024-05-25&quot;</span>,</span>
-<span id="cb4-9"><a href="#cb4-9" tabindex="-1"></a>  <span class="at">save_dir =</span> <span class="fu">tempdir</span>()</span>
-<span id="cb4-10"><a href="#cb4-10" tabindex="-1"></a>)</span>
-<span id="cb4-11"><a href="#cb4-11" tabindex="-1"></a><span class="co">#&gt; Please set the &#39;gcup&#39; parameter based on the 10-drops test.</span></span>
-<span id="cb4-12"><a href="#cb4-12" tabindex="-1"></a><span class="co">#&gt;            If units have different gram values, define &#39;gcup&#39; as a vector with an element for each unit.</span></span>
-<span id="cb4-13"><a href="#cb4-13" tabindex="-1"></a><span class="co">#&gt; RFID is NULL. It is recommended to include it.</span></span>
-<span id="cb4-14"><a href="#cb4-14" tabindex="-1"></a><span class="co">#&gt; Pellet intakes file created and saved to /var/folders/8n/lmf4l1hs7jz2m86j5g16k21c0000gn/T//RtmpVNOF8y</span></span>
-<span id="cb4-15"><a href="#cb4-15" tabindex="-1"></a></span>
-<span id="cb4-16"><a href="#cb4-16" tabindex="-1"></a><span class="fu">head</span>(result)</span>
-<span id="cb4-17"><a href="#cb4-17" tabindex="-1"></a><span class="co">#&gt; # A tibble: 6 × 3</span></span>
-<span id="cb4-18"><a href="#cb4-18" tabindex="-1"></a><span class="co">#&gt;   Date       RFID            PIntake_kg</span></span>
-<span id="cb4-19"><a href="#cb4-19" tabindex="-1"></a><span class="co">#&gt;   &lt;date&gt;     &lt;chr&gt;                &lt;dbl&gt;</span></span>
-<span id="cb4-20"><a href="#cb4-20" tabindex="-1"></a><span class="co">#&gt; 1 2024-05-13 154150620340444      0    </span></span>
-<span id="cb4-21"><a href="#cb4-21" tabindex="-1"></a><span class="co">#&gt; 2 2024-05-13 840003218921444      0.034</span></span>
-<span id="cb4-22"><a href="#cb4-22" tabindex="-1"></a><span class="co">#&gt; 3 2024-05-13 840003234513777      0.714</span></span>
-<span id="cb4-23"><a href="#cb4-23" tabindex="-1"></a><span class="co">#&gt; 4 2024-05-13 840003234513888      0.17 </span></span>
-<span id="cb4-24"><a href="#cb4-24" tabindex="-1"></a><span class="co">#&gt; 5 2024-05-13 840003250681111      0.068</span></span>
-<span id="cb4-25"><a href="#cb4-25" tabindex="-1"></a><span class="co">#&gt; 6 2024-05-13 840003250681222      0.85</span></span></code></pre></div>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a>file <span class="ot">&lt;-</span> <span class="fu">system.file</span>(<span class="st">&quot;extdata&quot;</span>, <span class="st">&quot;feedtimes.csv&quot;</span>, <span class="at">package =</span> <span class="st">&quot;greenfeedr&quot;</span>)</span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a></span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a>result <span class="ot">&lt;-</span> <span class="fu">pellin</span>(</span>
+<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a>  <span class="at">unit =</span> <span class="dv">1</span>,</span>
+<span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a>  <span class="at">gcup =</span> <span class="dv">34</span>,</span>
+<span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a>  <span class="at">start_date =</span> <span class="st">&quot;2024-05-13&quot;</span>,</span>
+<span id="cb6-7"><a href="#cb6-7" tabindex="-1"></a>  <span class="at">end_date =</span> <span class="st">&quot;2024-05-25&quot;</span>,</span>
+<span id="cb6-8"><a href="#cb6-8" tabindex="-1"></a>  <span class="at">save_dir =</span> <span class="fu">tempdir</span>(),</span>
+<span id="cb6-9"><a href="#cb6-9" tabindex="-1"></a>  <span class="at">file_path =</span> file</span>
+<span id="cb6-10"><a href="#cb6-10" tabindex="-1"></a>)</span>
+<span id="cb6-11"><a href="#cb6-11" tabindex="-1"></a><span class="co">#&gt; Please set the &#39;gcup&#39; parameter based on the 10-drops test.</span></span>
+<span id="cb6-12"><a href="#cb6-12" tabindex="-1"></a><span class="co">#&gt;            If units have different gram values, define &#39;gcup&#39; as a vector with an element for each unit.</span></span>
+<span id="cb6-13"><a href="#cb6-13" tabindex="-1"></a><span class="co">#&gt; RFID is NULL. It is recommended to include it.</span></span>
+<span id="cb6-14"><a href="#cb6-14" tabindex="-1"></a><span class="co">#&gt; Pellet intakes file created and saved to /var/folders/8n/lmf4l1hs7jz2m86j5g16k21c0000gn/T//Rtmpgl73EX</span></span>
+<span id="cb6-15"><a href="#cb6-15" tabindex="-1"></a></span>
+<span id="cb6-16"><a href="#cb6-16" tabindex="-1"></a><span class="fu">head</span>(result)</span>
+<span id="cb6-17"><a href="#cb6-17" tabindex="-1"></a><span class="co">#&gt; # A tibble: 6 × 3</span></span>
+<span id="cb6-18"><a href="#cb6-18" tabindex="-1"></a><span class="co">#&gt;   Date       RFID            PIntake_kg</span></span>
+<span id="cb6-19"><a href="#cb6-19" tabindex="-1"></a><span class="co">#&gt;   &lt;date&gt;     &lt;chr&gt;                &lt;dbl&gt;</span></span>
+<span id="cb6-20"><a href="#cb6-20" tabindex="-1"></a><span class="co">#&gt; 1 2024-05-13 154150620340444      0    </span></span>
+<span id="cb6-21"><a href="#cb6-21" tabindex="-1"></a><span class="co">#&gt; 2 2024-05-13 840003218921444      0.034</span></span>
+<span id="cb6-22"><a href="#cb6-22" tabindex="-1"></a><span class="co">#&gt; 3 2024-05-13 840003234513777      0.714</span></span>
+<span id="cb6-23"><a href="#cb6-23" tabindex="-1"></a><span class="co">#&gt; 4 2024-05-13 840003234513888      0.17 </span></span>
+<span id="cb6-24"><a href="#cb6-24" tabindex="-1"></a><span class="co">#&gt; 5 2024-05-13 840003250681111      0.068</span></span>
+<span id="cb6-25"><a href="#cb6-25" tabindex="-1"></a><span class="co">#&gt; 6 2024-05-13 840003250681222      0.85</span></span></code></pre></div>
 </div>
 <div id="citation" class="section level2">
 <h2>Citation</h2>

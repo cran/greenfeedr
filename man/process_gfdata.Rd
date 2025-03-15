@@ -6,9 +6,9 @@
 \arguments{
 \item{data}{a data frame with preliminary or finalized 'GreenFeed' data}
 
-\item{start_date}{a character string representing the start date of the study (format: "mm/dd/yyyy")}
+\item{start_date}{a character string representing the start date of the study (format: "dmy")}
 
-\item{end_date}{a character string representing the end date of the study (format: "mm/dd/yyyy")}
+\item{end_date}{a character string representing the end date of the study (format: "dmy")}
 
 \item{param1}{an integer representing the number of records per day to be consider for analysis}
 
@@ -19,7 +19,8 @@
 \item{cutoff}{an integer specifying the range for identifying outliers (default: 3 SD)}
 }
 \value{
-A list of two data frames:
+A list of three data frames:
+  \item{filtered_data }{data frame with filtered 'GreenFeed' data}
   \item{daily_data }{data frame with daily processed 'GreenFeed' data}
   \item{weekly_data }{data frame with weekly processed 'GreenFeed' data}
 }

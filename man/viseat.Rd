@@ -4,15 +4,19 @@
 \alias{viseat}
 \title{Process 'GreenFeed' Visits}
 \arguments{
-\item{file_path}{a character string or list representing files(s) with feedtimes from 'C-Lock Inc.'.}
+\item{user}{a character string representing the user name to logging into 'GreenFeed' system}
+
+\item{pass}{a character string representing password to logging into 'GreenFeed' system}
 
 \item{unit}{numeric or character vector or list representing one or more GreenFeed unit numbers.}
 
-\item{start_date}{a character string representing the start date of the study (format: "mm/dd/yyyy")}
+\item{start_date}{a character string representing the start date of the study (format: "dmy")}
 
-\item{end_date}{a character string representing the end date of the study (format: "mm/dd/yyyy")}
+\item{end_date}{a character string representing the end date of the study (format: "dmy")}
 
 \item{rfid_file}{a character string representing the file with individual RFIDs. The order should be Visual ID (col1) and RFID (col2)}
+
+\item{file_path}{a character string or list representing files(s) with feedtimes from 'C-Lock Inc.'}
 }
 \value{
 A list of two data frames:
@@ -27,7 +31,7 @@ Processes 'GreenFeed' visits and food drops for a requested period.
 \examples{
 # You should provide the feedtimes files.
 # it could be a list of files if you have data from multiple units to combine
-path <- list(system.file("extdata", "feedtimes.csv", package = "greenfeedr"))
+path <- system.file("extdata", "feedtimes.csv", package = "greenfeedr")
 
 # If the user include an rfid file, the structure should be in col1 AnimalName or VisualID, and
 # col2 the RFID or TAG_ID. The file could be save in different formats (.xlsx, .csv, or .txt).

@@ -1,33 +1,36 @@
 #' @name get_gfdata
-#' @title Download Preliminary 'GreenFeed' Data via 'API'
+#' @title Download Preliminary and Raw 'GreenFeed' Data via 'API'
 #'
-#' @description Downloads preliminary 'GreenFeed' data from the 'C-Lock Inc.' server via an 'API'.
+#' @description Downloads preliminary and raw 'GreenFeed' data from the 'C-Lock Inc.' server via an 'API'.
 #'     Retrieves data based on specified parameters (login, date range, and units), and
 #'     provides a CSV file with the 'GreenFeed' preliminary data.
 #'
 #' @param user a character string representing the user name to logging into 'GreenFeed' system
 #' @param pass a character string representing password to logging into 'GreenFeed' system
+#' @param d a character string representing data type to download (opts: "visits", "feed", "rfid", "cmds")
 #' @param exp a character string representing study name or other study identifier. It is used as file name to save the data
 #' @param unit numeric or character vector, or a list representing one or more 'GreenFeed' unit numbers
-#' @param start_date a character string representing the start date of the study (format: "mm/dd/yyyy")
-#' @param end_date a character string representing the end date of the study (format: "mm/dd/yyyy")
+#' @param start_date a character string representing the start date of the study (format: "dmy")
+#' @param end_date a character string representing the end date of the study (format: "dmy")
 #' @param save_dir a character string representing the directory to save the output file
 #'
-#' @return A CSV file with preliminary 'GreenFeed' data in the specified directory
+#' @return A CSV file with the specified data (visits or raw) saved in the provided directory.
 #'
 #' @examplesIf has_credentials()
 #' # Please replace "your_username" and "your_password" with your actual 'GreenFeed' credentials.
-#' # Example with units as a vector
+#' # By default, the function downloads the preliminary 'GreenFeed' data,
+#' # if raw data is needed use options: "feed", "rfid", or "cmds"
 #'
 #' get_gfdata(
-#'    user = "your_username",
-#'    pass = "your_password",
-#'    exp = "StudyName",
-#'    unit = c(304, 305),
-#'    start_date = "2024-01-01",
-#'    end_date = Sys.Date(),
-#'    save_dir = tempdir()
-#'    )
+#'   user = "your_username",
+#'   pass = "your_password",
+#'   d = "visits",
+#'   exp = "StudyName",
+#'   unit = c(304, 305),
+#'   start_date = "2024-01-01",
+#'   end_date = Sys.Date(),
+#'   save_dir = tempdir()
+#' )
 #'
 #' @export get_gfdata
 #'
@@ -35,14 +38,20 @@
 #' @import readr
 #' @import stringr
 
-get_gfdata <- function(user, pass, exp = NA, unit,
+get_gfdata <- function(user, pass, d = "visits", exp = NA, unit,
                        start_date, end_date = Sys.Date(), save_dir = tempdir()) {
   # Ensure unit is a comma-separated string
-  unit <- convert_unit(unit)
+  unit <- convert_unit(unit,1)
 
   # Check date format
   start_date <- ensure_date_format(start_date)
   end_date <- ensure_date_format(end_date)
+
+  # Ensure d argument is valid
+  valid_inputs <- c("visits", "feed", "rfid", "cmds")
+  if (!(d %in% valid_inputs)) {
+    stop(paste("Invalid argument. Choose one of:", paste(valid_inputs, collapse = ", ")))
+  }
 
   # Authenticate to receive token
   req <- httr::POST("https://portal.c-lockinc.com/api/login", body = list(user = user, pass = pass))
@@ -50,10 +59,17 @@ get_gfdata <- function(user, pass, exp = NA, unit,
   TOK <- trimws(httr::content(req, as = "text"))
 
   # Get data using the login token
-  URL <- paste0(
-    "https://portal.c-lockinc.com/api/getemissions?d=visits&fids=", unit,
-    "&st=", start_date, "&et=", end_date, "%2012:00:00"
-  )
+  if (d == "visits") {
+    URL <- paste0(
+      "https://portal.c-lockinc.com/api/getemissions?d=", d, "&fids=", unit,
+      "&st=", start_date, "&et=", end_date, "%2012:00:00"
+    )
+  } else {
+    URL <- paste0(
+      "https://portal.c-lockinc.com/api/getraw?d=", d, "&fids=", unit,
+      "&st=", start_date, "&et=", end_date, "%2012:00:00"
+    )
+  }
   message(URL)
 
   req <- httr::POST(URL, body = list(token = TOK))
@@ -66,29 +82,59 @@ get_gfdata <- function(user, pass, exp = NA, unit,
   # Split the commas into a data frame, while getting rid of the "Parameters" line and the headers line
   df <- do.call("rbind", stringr::str_split(perline[3:length(perline)], ","))
   df <- as.data.frame(df)
-  colnames(df) <- c(
-    "FeederID",
-    "AnimalName",
-    "RFID",
-    "StartTime",
-    "EndTime",
-    "GoodDataDuration",
-    "CO2GramsPerDay",
-    "CH4GramsPerDay",
-    "O2GramsPerDay",
-    "H2GramsPerDay",
-    "H2SGramsPerDay",
-    "AirflowLitersPerSec",
-    "AirflowCf",
-    "WindSpeedMetersPerSec",
-    "WindDirDeg",
-    "WindCf",
-    "WasInterrupted",
-    "InterruptingTags",
-    "TempPipeDegreesCelsius",
-    "IsPreliminary",
-    "RunTime"
-  )
+
+  if (d == "visits") {
+    colnames(df) <- c(
+      "FeederID",
+      "AnimalName",
+      "RFID",
+      "StartTime",
+      "EndTime",
+      "GoodDataDuration",
+      "CO2GramsPerDay",
+      "CH4GramsPerDay",
+      "O2GramsPerDay",
+      "H2GramsPerDay",
+      "H2SGramsPerDay",
+      "AirflowLitersPerSec",
+      "AirflowCf",
+      "WindSpeedMetersPerSec",
+      "WindDirDeg",
+      "WindCf",
+      "WasInterrupted",
+      "InterruptingTags",
+      "TempPipeDegreesCelsius",
+      "IsPreliminary",
+      "RunTime"
+    )
+  } else if (d == "feed") {
+    colnames(df) <- c(
+      "FID",
+      "FeedTime",
+      "CowTag",
+      "CurrentCup",
+      "MaxCups",
+      "CurrentPeriod",
+      "MaxPeriods",
+      "CupDelay",
+      "PeriodDelay",
+      "FoodType"
+    )
+  } else if (d == "rfid") {
+    colnames(df) <- c(
+      "FID",
+      "ScanTime",
+      "CowTag",
+      "InOrOut",
+      "Tray(IfApplicable)"
+    )
+  } else if (d == "cmds") {
+    colnames(df) <- c(
+      "FID",
+      "CommandTime",
+      "Cmd"
+    )
+  }
 
   # Check if the directory exists, if not, create it
   if (!dir.exists(save_dir)) {
@@ -96,7 +142,15 @@ get_gfdata <- function(user, pass, exp = NA, unit,
   }
 
   # Save your data as a data file in .csv format
-  readr::write_excel_csv(df, file = paste0(save_dir, "/", exp, "_GFdata.csv"))
+  if (d == "visits") {
+    readr::write_excel_csv(df, file = paste0(save_dir, "/", exp, "_GFdata.csv"))
+  } else if (d == "feed") {
+    readr::write_excel_csv(df, file = paste0(save_dir, "/", exp, "_feedtimes.csv"))
+  } else if (d == "rfid") {
+    readr::write_excel_csv(df, file = paste0(save_dir, "/", exp, "_rfids.csv"))
+  } else if (d == "cmds") {
+    readr::write_excel_csv(df, file = paste0(save_dir, "/", exp, "_commands.csv"))
+  }
 
   message("Downloading complete.")
 }

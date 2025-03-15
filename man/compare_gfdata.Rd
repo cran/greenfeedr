@@ -8,9 +8,9 @@
 
 \item{finalrep}{a data frame with finalized 'GreenFeed' data}
 
-\item{start_date}{a character string representing the start date of the study (format: "mm/dd/yyyy")}
+\item{start_date}{a character string representing the start date of the study (format: "dmy")}
 
-\item{end_date}{a character string representing the end date of the study (format: "mm/dd/yyyy")}
+\item{end_date}{a character string representing the end date of the study (format: "dmy")}
 }
 \value{
 Data frame including records removed from preliminary and final reports
@@ -19,14 +19,15 @@ Data frame including records removed from preliminary and final reports
 Compare preliminary and finalized 'GreenFeed' data.
 }
 \examples{
-#Datasets with preliminary and finalized GreenFeed data
+# Datasets with preliminary and finalized GreenFeed data
 prelimrep <- system.file("extdata", "StudyName_GFdata.csv", package = "greenfeedr")
 finalrep <- system.file("extdata", "StudyName_FinalReport.xlsx", package = "greenfeedr")
 
 data <- compare_gfdata(
-            prelimrep,
-            finalrep,
-            start_date = "2024-05-13",
-            end_date = "2024-05-20")
+  prelimrep,
+  finalrep,
+  start_date = "2024-05-13",
+  end_date = "2024-05-20"
+)
 
 }

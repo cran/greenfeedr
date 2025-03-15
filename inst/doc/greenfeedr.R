@@ -217,16 +217,36 @@ plot2 <- df %>%
 plot1
 plot2
 
+## ----parameters---------------------------------------------------------------
+# Define the parameter space for param1 (i), param2 (j), and min_time (k):
+i <- seq(1, 6)
+j <- seq(1, 7)
+k <- seq(2, 6)
+
+# Generate all combinations of i, j, and k
+param_combinations <- expand.grid(param1 = i, param2 = j, min_time = k)
+
+## ----Example, message = FALSE, results = 'hide'-------------------------------
+finaldata <- readxl::read_excel(system.file("extdata", "StudyName_FinalReport.xlsx", package = "greenfeedr"))
+
+data <- eval_gfparam(data = finaldata,
+                     start_date = "2024-05-13",
+                     end_date = "2024-05-25"
+                     )
+
+## ----Results table, echo = FALSE, message = FALSE, results = 'asis'-----------
+cat(knitr::kable(data[1:10, ], format = "html", table.attr = "style='font-size: 12px;'"))
+
 ## ----pellin and viseat--------------------------------------------------------
-file <- list(system.file("extdata", "feedtimes.csv", package = "greenfeedr"))
+file <- system.file("extdata", "feedtimes.csv", package = "greenfeedr")
 
 result <- pellin(
-  file_path = file,
   unit = 1,
   gcup = 34,
   start_date = "2024-05-13",
   end_date = "2024-05-25",
-  save_dir = tempdir()
+  save_dir = tempdir(),
+  file_path = file
 )
 
 head(result)

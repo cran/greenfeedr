@@ -4,35 +4,38 @@
 \alias{pellin}
 \title{Process 'GreenFeed' Pellet Intakes}
 \arguments{
-\item{file_path}{a character string or list representing files(s) with "feedtimes" from 'C-Lock Inc.'}
+\item{user}{a character string representing the user name to logging into 'GreenFeed' system}
+
+\item{pass}{a character string representing password to logging into 'GreenFeed' system}
 
 \item{unit}{numeric or character vector or list representing one or more 'GreenFeed' unit numbers. The order should match with "feedtimes" files}
 
 \item{gcup}{a numeric value representing the grams of pellets per cup.}
 
-\item{start_date}{a character string representing the start date of the study (format: "mm/dd/yyyy")}
+\item{start_date}{a character string representing the start date of the study (format: "dmy")}
 
-\item{end_date}{a character string representing the end date of the study (format: "mm/dd/yyyy")}
+\item{end_date}{a character string representing the end date of the study (format: "dmy")}
 
 \item{save_dir}{a character string representing the directory to save the output file}
 
 \item{rfid_file}{a character string representing the file with individual IDs. The order should be Visual ID (col1) and RFID (col2)}
+
+\item{file_path}{a character string or list representing files(s) with "feedtimes" from 'C-Lock Inc.'}
 }
 \value{
 An Excel file with pellet intakes for all animals and days within the specified period is saved to save_dir.
     The file is named "Pellet_Intakes_YYYY-MM-DD_YYYY-MM-DD.csv".
 }
 \description{
-Processes the "feedtimes" file from 'GreenFeed' system,
-    including visits and food drops across a specific period, and it is used
-    to calculate pellet intakes per animal from all units.
+Processes 'feedtimes' file from 'GreenFeed' system.
+    Food drops are used to calculate pellet intakes per animal.
     Aggregates data to provide insights into the feeding behavior
     and pellet consumption of the animals during a study.
 }
 \examples{
 # You should provide the 'feedtimes' file provided by C-Lock.
 # it could be a list of files if you have data from multiple units to combine
-path <- list(system.file("extdata", "feedtimes.csv", package = "greenfeedr"))
+path <- system.file("extdata", "feedtimes.csv", package = "greenfeedr")
 
 # You must include the grams of pellets per cup based on the result obtained from the 10-drops test
 
@@ -41,13 +44,13 @@ path <- list(system.file("extdata", "feedtimes.csv", package = "greenfeedr"))
 RFIDs <- system.file("extdata", "RFID_file.csv", package = "greenfeedr")
 
 pellin(
-  file_path = path,
   unit = 1,
   gcup = 34,
   start_date = "2024-05-13",
   end_date = "2024-05-25",
   save_dir = tempdir(),
-  rfid_file = RFIDs
+  rfid_file = RFIDs,
+  file_path = path
 )
 
 }

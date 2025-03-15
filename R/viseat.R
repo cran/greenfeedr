@@ -5,11 +5,13 @@
 #'      Generates a list of animals not visiting the 'GreenFeed' to manage them,
 #'      and a description of animals visiting the 'GreenFeed'.
 #'
-#' @param file_path a character string or list representing files(s) with feedtimes from 'C-Lock Inc.'.
+#' @param user a character string representing the user name to logging into 'GreenFeed' system
+#' @param pass a character string representing password to logging into 'GreenFeed' system
 #' @param unit numeric or character vector or list representing one or more GreenFeed unit numbers.
-#' @param start_date a character string representing the start date of the study (format: "mm/dd/yyyy")
-#' @param end_date a character string representing the end date of the study (format: "mm/dd/yyyy")
+#' @param start_date a character string representing the start date of the study (format: "dmy")
+#' @param end_date a character string representing the end date of the study (format: "dmy")
 #' @param rfid_file a character string representing the file with individual RFIDs. The order should be Visual ID (col1) and RFID (col2)
+#' @param file_path a character string or list representing files(s) with feedtimes from 'C-Lock Inc.'
 #'
 #' @return A list of two data frames:
 #'   \item{visits_per_unit }{Data frame with daily processed 'GreenFeed' data, including columns for VisualID, Date, Time, number of drops, and visits.}
@@ -19,7 +21,7 @@
 #' @examples
 #' # You should provide the feedtimes files.
 #' # it could be a list of files if you have data from multiple units to combine
-#' path <- list(system.file("extdata", "feedtimes.csv", package = "greenfeedr"))
+#' path <- system.file("extdata", "feedtimes.csv", package = "greenfeedr")
 #'
 #' # If the user include an rfid file, the structure should be in col1 AnimalName or VisualID, and
 #' # col2 the RFID or TAG_ID. The file could be save in different formats (.xlsx, .csv, or .txt).
@@ -48,10 +50,93 @@ utils::globalVariables(c(
   "Time", "CurrentPeriod", "ndrops", "Date", "FarmName"
 ))
 
-viseat <- function(file_path, unit, start_date, end_date, rfid_file = NA) {
+viseat <- function(user = NA, pass = NA, unit,
+                   start_date, end_date, rfid_file = NULL, file_path = NULL) {
   # Check Date format
   start_date <- ensure_date_format(start_date)
   end_date <- ensure_date_format(end_date)
+
+  if (is.null(file_path)) {
+    # Ensure unit is a comma-separated string
+    unit <- convert_unit(unit,1)
+
+    # Authenticate to receive token
+    req <- httr::POST("https://portal.c-lockinc.com/api/login", body = list(user = user, pass = pass))
+    httr::stop_for_status(req)
+    TOK <- trimws(httr::content(req, as = "text"))
+
+    # Get data using the login token
+    URL <- paste0(
+      "https://portal.c-lockinc.com/api/getraw?d=feed&fids=", unit,
+      "&st=", start_date, "&et=", end_date, "%2012:00:00"
+    )
+    message(URL)
+
+    req <- httr::POST(URL, body = list(token = TOK))
+    httr::stop_for_status(req)
+    a <- httr::content(req, as = "text")
+
+    # Split the lines
+    perline <- stringr::str_split(a, "\\n")[[1]]
+
+    # Split the commas into a data frame, while getting rid of the "Parameters" line and the headers line
+    df <- do.call("rbind", stringr::str_split(perline[3:length(perline)], ","))
+    df <- as.data.frame(df)
+    colnames(df) <- c(
+      "FID",
+      "FeedTime",
+      "CowTag",
+      "CurrentCup",
+      "MaxCups",
+      "CurrentPeriod",
+      "MaxPeriods",
+      "CupDelay",
+      "PeriodDelay",
+      "FoodType"
+    )
+
+    # Remove leading zeros from tag IDs and formatting Date
+    df <- df %>%
+      dplyr::mutate(
+        CowTag = gsub("^0+", "", CowTag),
+        FeedTime = as.POSIXct(FeedTime, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+      )
+  } else {
+
+    ext <- tools::file_ext(file_path)
+    if (ext == "csv") {
+      # Read CSV file
+      df <- readr::read_csv(file_path, show_col_types = FALSE)
+    } else if (ext %in% c("xls", "xlsx")) {
+      # Read Excel file (both xls and xlsx)
+      df <- readxl::read_excel(file_path)
+    } else {
+      stop("Unsupported file type. Please provide a CSV, XLS, or XLSX file.")
+    }
+
+    # Detect date format
+    if (all(grepl("^\\d{4}-\\d{2}-\\d{2}", df$FeedTime))) {
+      detected_format <- "%Y-%m-%d %H:%M:%S"
+    } else if (all(grepl("^\\d{1,2}/\\d{1,2}/\\d{2}", df$FeedTime))) {
+      detected_format <- "mdy_hm"
+    } else {
+      stop("Unknown FeedTime format in dataset!")
+    }
+
+    # Convert FeedTime using the detected format
+    df <- df %>%
+      mutate(
+        FID = as.character(FID),
+        CowTag = gsub("^0+", "", CowTag),
+        FeedTime = if (detected_format == "%Y-%m-%d %H:%M:%S") {
+          as.POSIXct(FeedTime, format = detected_format)
+        } else {
+          mdy_hm(FeedTime)
+        }
+      )
+
+  }
+
 
   # Process the rfid data
   rfid_file <- process_rfid_data(rfid_file)
@@ -60,24 +145,6 @@ viseat <- function(file_path, unit, start_date, end_date, rfid_file = NA) {
     message("RFID data could not be processed. Exiting function.")
     return(NULL)
   }
-
-  # Read and bind feedtimes data
-  df <- purrr::map2_dfr(file_path, unit, ~ {
-    if (grepl("\\.csv$", .x)) {
-      # Read CSV file
-      readr::read_csv(.x, show_col_types = FALSE) %>%
-        dplyr::mutate(FID = .y)
-    } else if (grepl("\\.xls?$", .x)) {
-      # Read Excel file
-      readxl::read_excel(.x) %>%
-        dplyr::mutate(FID = .y)
-    } else {
-      stop("Unsupported file type. Please provide a CSV or Excel file.")
-    }
-  }) %>%
-    dplyr::relocate(FID, .before = FeedTime) %>%
-    dplyr::mutate(CowTag = gsub("^0+", "", CowTag))
-
 
   # If rfid_file provided, filter and get animal ID not visiting the 'GreenFeed' units
   df <- df[df$CowTag %in% rfid_file$RFID, ]
@@ -126,6 +193,7 @@ viseat <- function(file_path, unit, start_date, end_date, rfid_file = NA) {
   # Calculate the number of drops and visits per animal
   animal_visits <- daily_visits %>%
     dplyr::group_by(FarmName) %>%
+    dplyr::mutate(visits = as.numeric(visits)) %>%
     dplyr::summarise(
       total_drops = sum(ndrops),
       total_visits = sum(visits),
