@@ -6,11 +6,11 @@
 #'     If the preliminary option is used, the data is retrieved from the 'C-Lock Inc.' server through an 'API',
 #'     otherwise the data processed by 'C-Lock Inc.' must be provided to generate the report.
 #'
-#' @param input_type a character string representing type of data (options: "prelim" or "daily, and "final")
+#' @param input_type a character string representing type of data (options: "prelim" and "final")
 #' @param exp a character string representing study name or other study identifier. It is used as file name to save the data
 #' @param unit numeric or character vector, or a list representing one or more 'GreenFeed' unit numbers
-#' @param start_date a character string representing the start date of the study (format: "dmy")
-#' @param end_date a character string representing the end date of the study (format: "dmy")
+#' @param start_date a character string representing the start date of the study (format: "DD-MM-YY" or "YYYY-MM-DD")
+#' @param end_date a character string representing the end date of the study (format: "DD-MM-YY" or "YYYY-MM-DD")
 #' @param save_dir a character string representing the directory to save the output file
 #' @param plot_opt a character string representing the gas(es) to plot (options: "All", "CH4", "CO2", "O2", "H2")
 #' @param rfid_file a character string representing the file with individual IDs. The order should be Visual ID (col1) and RFID (col2)
@@ -53,7 +53,7 @@ utils::globalVariables(c("GoodDataDuration", "StartTime", "AirflowLitersPerSec",
 
 report_gfdata <- function(input_type, exp = NA, unit, start_date, end_date = Sys.Date(),
                           save_dir = tempdir(), plot_opt = "CH4", rfid_file = NULL,
-                          user = NA, pass = NA, file_path) {
+                          user = NA, pass = NA, file_path = NULL) {
   # Ensure unit is a comma-separated string
   unit <- convert_unit(unit,1)
 
@@ -65,21 +65,24 @@ report_gfdata <- function(input_type, exp = NA, unit, start_date, end_date = Sys
   input_type <- tolower(input_type)
 
   # Ensure input_type is valid
-  valid_inputs <- c("final", "prelim", "daily")
+  valid_inputs <- c("final", "prelim")
   if (!(input_type %in% valid_inputs)) {
-    stop(paste("Invalid input_type. Choose one of:", paste(valid_inputs, collapse = ", ")))
+    stop(paste("Invalid input type. Choose one of:", paste(valid_inputs, collapse = ", ")))
   }
 
-  if (input_type == "prelim" | input_type == "daily") {
+  if (is.null(file_path)) {
     # First Authenticate to receive token:
     req <- httr::POST("https://portal.c-lockinc.com/api/login", body = list(user = user, pass = pass))
     httr::stop_for_status(req)
     TOK <- trimws(httr::content(req, as = "text"))
 
+    # Assign type based on input_type
+    type <- ifelse(input_type == "final", 1, 2)
+
     # Get data using the login token
     URL <- paste0(
       "https://portal.c-lockinc.com/api/getemissions?d=visits&fids=", unit,
-      "&st=", start_date, "&et=", end_date, "%2012:00:00"
+      "&st=", start_date, "&et=", end_date, "%2012:00:00&type=", type
     )
     message(URL)
 
@@ -118,14 +121,16 @@ report_gfdata <- function(input_type, exp = NA, unit, start_date, end_date = Sys
       "RunTime"
     )
 
-    # Check if the directory exists, if not, create it
+    # Ensure save_dir is an absolute path
+    save_dir <- normalizePath(save_dir, mustWork = FALSE)
+
+    # Check if the directory exists, and create it if necessary
     if (!dir.exists(save_dir)) {
       dir.create(save_dir, recursive = TRUE)
     }
 
     # Save 'GreenFeed' data as a csv file in the specified directory
     readr::write_excel_csv(df, file = paste0(save_dir, "/", exp, "_GFdata.csv"))
-
 
     # Process the rfid data
     rfid_file <- process_rfid_data(rfid_file)
@@ -177,10 +182,17 @@ report_gfdata <- function(input_type, exp = NA, unit, start_date, end_date = Sys
     }
 
     # Create PDF report using Rmarkdown
-    rmarkdown::render(
-      input = system.file("DailyReportsGF.Rmd", package = "greenfeedr"),
-      output_file = file.path(save_dir, paste0("/DailyReport_", exp, ".pdf"))
-    )
+    if (input_type == "prelim") {
+      rmarkdown::render(
+        input = system.file("DailyReportsGF.Rmd", package = "greenfeedr"),
+        output_file = file.path(save_dir, paste0("DailyReport_", exp, ".pdf"))
+      )
+    } else if (input_type == "final") {
+      rmarkdown::render(
+        input = system.file("FinalReportsGF.Rmd", package = "greenfeedr"),
+        output_file = file.path(save_dir, paste0("FinalReport_", exp, ".pdf"))
+      )
+    }
   } else {
     # Function to read and process each file
     process_file <- function(file_path) {
@@ -202,10 +214,27 @@ report_gfdata <- function(input_type, exp = NA, unit, start_date, end_date = Sys
         "AirflowCf"
       )
 
+      # Process the rfid data
+      rfid_file <- process_rfid_data(rfid_file)
+
+      # Create a function to conditionally perform inner join
+      conditional_inner_join <- function(df, rfid_file) {
+        if (!is.null(rfid_file) && nrow(rfid_file) > 0) {
+          inner_join(df, rfid_file, by = "RFID")
+        } else {
+          df
+        }
+      }
+
       # df contains finalized 'GreenFeed' data
       df <- df %>%
         ## Remove "unknown IDs" and leading zeros from RFID col
         dplyr::filter(RFID != "unknown") %>%
+        dplyr::mutate(RFID = gsub("^0+", "", RFID)) %>%
+        ## Conditionally perform the inner_join if rfid_file exists
+        conditional_inner_join(rfid_file) %>%
+        dplyr::distinct_at(dplyr::vars(1:5), .keep_all = TRUE) %>%
+        ## Change columns format
         dplyr::mutate(
           RFID = gsub("^0+", "", RFID),
           ## Extract hours, minutes, and seconds from GoodDataDuration
@@ -231,12 +260,22 @@ report_gfdata <- function(input_type, exp = NA, unit, start_date, end_date = Sys
     # Combine all final report files into one data frame
     df <- do.call(rbind, lapply(file_path, process_file))
 
-    # Process the rfid data
+    # If rfid file is provided, process it for the PDF report
     rfid_file <- process_rfid_data(rfid_file)
+    if (!is.null(rfid_file) && nrow(rfid_file) > 0) {
+      rfid_file <- rfid_file %>%
+        dplyr::mutate(
+          ## 'Data' col is a binary (YES = animal has records, NO = animal has no records)
+          Gas_Data = ifelse(RFID %in% df$RFID, "Yes", "No")
+        )
+    }
 
-    # If rfid file is provided then perform inner join
-    if (!is.null(rfid_file) && is.data.frame(rfid_file) && nrow(rfid_file) > 0) {
-      df <- dplyr::inner_join(df, rfid_file, by = "RFID")
+    # Ensure save_dir is an absolute path
+    save_dir <- normalizePath(save_dir, mustWork = FALSE)
+
+    # Check if the directory exists, and create it if necessary
+    if (!dir.exists(save_dir)) {
+      dir.create(save_dir, recursive = TRUE)
     }
 
     # Create PDF report using Rmarkdown

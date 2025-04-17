@@ -10,9 +10,9 @@
 
 \item{unit}{numeric or character vector or list representing one or more GreenFeed unit numbers.}
 
-\item{start_date}{a character string representing the start date of the study (format: "dmy")}
+\item{start_date}{a character string representing the start date of the study (format: "DD-MM-YY" or "YYYY-MM-DD")}
 
-\item{end_date}{a character string representing the end date of the study (format: "dmy")}
+\item{end_date}{a character string representing the end date of the study (format: "DD-MM-YY" or "YYYY-MM-DD")}
 
 \item{rfid_file}{a character string representing the file with individual RFIDs. The order should be Visual ID (col1) and RFID (col2)}
 
@@ -20,7 +20,7 @@
 }
 \value{
 A list of two data frames:
-  \item{visits_per_unit }{Data frame with daily processed 'GreenFeed' data, including columns for VisualID, Date, Time, number of drops, and visits.}
+  \item{visits_per_day }{Data frame with daily processed 'GreenFeed' data, including columns for VisualID, Date, Time, number of drops, and visits.}
   \item{visits_per_animal }{Data frame with weekly processed 'GreenFeed' data, including columns for VisualID, total drops, total visits, mean drops, and mean visits.}
 }
 \description{

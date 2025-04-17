@@ -8,10 +8,11 @@
 #' @param user a character string representing the user name to logging into 'GreenFeed' system
 #' @param pass a character string representing password to logging into 'GreenFeed' system
 #' @param d a character string representing data type to download (opts: "visits", "feed", "rfid", "cmds")
+#' @param type a numeric representing the type of data to retrieve (1=finalized and 2=preliminary)
 #' @param exp a character string representing study name or other study identifier. It is used as file name to save the data
 #' @param unit numeric or character vector, or a list representing one or more 'GreenFeed' unit numbers
-#' @param start_date a character string representing the start date of the study (format: "dmy")
-#' @param end_date a character string representing the end date of the study (format: "dmy")
+#' @param start_date a character string representing the start date of the study (format: "DD-MM-YY" or "YYYY-MM-DD")
+#' @param end_date a character string representing the end date of the study (format: "DD-MM-YY" or "YYYY-MM-DD")
 #' @param save_dir a character string representing the directory to save the output file
 #'
 #' @return A CSV file with the specified data (visits or raw) saved in the provided directory.
@@ -25,6 +26,7 @@
 #'   user = "your_username",
 #'   pass = "your_password",
 #'   d = "visits",
+#'   type = 2,
 #'   exp = "StudyName",
 #'   unit = c(304, 305),
 #'   start_date = "2024-01-01",
@@ -38,7 +40,7 @@
 #' @import readr
 #' @import stringr
 
-get_gfdata <- function(user, pass, d = "visits", exp = NA, unit,
+get_gfdata <- function(user, pass, d = "visits", type = 2, exp = NA, unit,
                        start_date, end_date = Sys.Date(), save_dir = tempdir()) {
   # Ensure unit is a comma-separated string
   unit <- convert_unit(unit,1)
@@ -58,30 +60,48 @@ get_gfdata <- function(user, pass, d = "visits", exp = NA, unit,
   httr::stop_for_status(req)
   TOK <- trimws(httr::content(req, as = "text"))
 
-  # Get data using the login token
-  if (d == "visits") {
-    URL <- paste0(
-      "https://portal.c-lockinc.com/api/getemissions?d=", d, "&fids=", unit,
-      "&st=", start_date, "&et=", end_date, "%2012:00:00"
-    )
-  } else {
-    URL <- paste0(
-      "https://portal.c-lockinc.com/api/getraw?d=", d, "&fids=", unit,
-      "&st=", start_date, "&et=", end_date, "%2012:00:00"
-    )
+  # Internal function to download and parse
+  download_and_parse <- function(type) {
+    if (d == "visits") {
+      URL <- paste0(
+        "https://portal.c-lockinc.com/api/getemissions?d=", d, "&fids=", unit,
+        "&st=", start_date, "&et=", end_date, "%2012:00:00&type=", type
+      )
+    } else {
+      URL <- paste0(
+        "https://portal.c-lockinc.com/api/getraw?d=", d, "&fids=", unit,
+        "&st=", start_date, "&et=", end_date, "%2012:00:00"
+      )
+    }
+    message(URL)
+
+    req <- httr::POST(URL, body = list(token = TOK))
+    httr::stop_for_status(req)
+    a <- httr::content(req, as = "text")
+    perline <- stringr::str_split(a, "\\n")[[1]]
+    df <- do.call("rbind", stringr::str_split(perline[3:length(perline)], ","))
+    df <- as.data.frame(df)
+    return(df)
   }
-  message(URL)
 
-  req <- httr::POST(URL, body = list(token = TOK))
-  httr::stop_for_status(req)
-  a <- httr::content(req, as = "text")
+  # Try first with selected type
+  df <- tryCatch({
+    df <- download_and_parse(type)
+    if (nrow(df) <= 1 && d == "visits" && type == 1) {
+      message("No finalized data. Trying preliminary data (type = 2)...")
+      df <- download_and_parse(2)
+    }
+    df
+  }, error = function(e) {
+    message("Download failed: ", e$message)
+    return(NULL)
+  })
 
-  # Split the lines
-  perline <- stringr::str_split(a, "\\n")[[1]]
+  if (is.null(df) || nrow(df) <= 1) {
+    message("No valid data retrieved.")
+    return(invisible(NULL))
+  }
 
-  # Split the commas into a data frame, while getting rid of the "Parameters" line and the headers line
-  df <- do.call("rbind", stringr::str_split(perline[3:length(perline)], ","))
-  df <- as.data.frame(df)
 
   if (d == "visits") {
     colnames(df) <- c(
@@ -136,7 +156,10 @@ get_gfdata <- function(user, pass, d = "visits", exp = NA, unit,
     )
   }
 
-  # Check if the directory exists, if not, create it
+  # Ensure save_dir is an absolute path
+  save_dir <- normalizePath(save_dir, mustWork = FALSE)
+
+  # Check if the directory exists, and create it if necessary
   if (!dir.exists(save_dir)) {
     dir.create(save_dir, recursive = TRUE)
   }

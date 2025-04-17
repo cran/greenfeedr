@@ -1,8 +1,8 @@
 .onAttach <- function(libname, pkgname) {
   packageStartupMessage(
     "Thank you for using the greenfeedr package!\n",
-    "Cite: Martinez-Boggio et al. (2025). Greenfeedr: An R-package for processing and reporting GreenFeed data.\n",
-    "Type 'help(greenfeedr)' for summary information"
+    "Cite: Martinez-Boggio et al. (2025). greenfeedr: An R-package for processing and reporting GreenFeed data.\n",
+    "Type '??greenfeedr' for summary information"
   )
 }
 
@@ -153,12 +153,6 @@ filter_within_range <- function(v, cutoff) {
 #' # Expected output: message "RFID is NA. It is recommended to include it." and NULL
 #' message(invalid_data)
 #'
-#' # Example with unsupported file format
-#' # Assuming 'rfid_data.docx' is an unsupported file format
-#' invalid_file <- process_rfid_data("path/to/rfid_data.docx")
-#' # Expected output: error message "Unsupported file format."
-#' message(invalid_file)
-#'
 #' @export
 #' @keywords internal
 process_rfid_data <- function(rfid_file) {
@@ -185,9 +179,17 @@ process_rfid_data <- function(rfid_file) {
     return(rfid_file)
   }
 
-  # Check if rfid_file is a file path
-  if (is.character(rfid_file) && file.exists(rfid_file)) {
+  # Normalize file path
+  if (is.character(rfid_file)) {
+    rfid_file <- normalizePath(rfid_file, mustWork = FALSE)
+
+    # Check if the file exists
+    if (!file.exists(rfid_file)) {
+      stop("The specified RFID file does not exist: ", rfid_file)
+    }
+
     file_extension <- tolower(tools::file_ext(rfid_file))
+
     tryCatch(
       {
         if (file_extension == "csv") {
@@ -198,13 +200,19 @@ process_rfid_data <- function(rfid_file) {
         } else if (file_extension == "txt") {
           rfid_file <- readr::read_table(rfid_file, col_types = readr::cols(.default = readr::col_character()))
         } else {
-          stop("Unsupported file format.")
+          stop("Unsupported file format: ", file_extension)
         }
+
+        # Check if file is empty
+        if (nrow(rfid_file) == 0) {
+          stop("The RFID file is empty: ", rfid_file)
+        }
+
         rfid_file <- standardize_columns(rfid_file)
         return(rfid_file)
       },
       error = function(e) {
-        stop("An error occurred while reading the file: ", e$message)
+        stop("Error reading the RFID file: ", e$message)
       }
     )
   }
@@ -213,7 +221,6 @@ process_rfid_data <- function(rfid_file) {
   message("No valid data provided. Please include a valid 'rfid_file' parameter.")
   return(NULL)
 }
-
 
 
 #' @name convert_unit
@@ -248,7 +255,6 @@ process_rfid_data <- function(rfid_file) {
 #' @keywords internal
 convert_unit <- function(unit, t) {
   if (t == 1) {
-    # Handle case for numeric or character vectors, lists, and single values
     if (is.numeric(unit)) {
       unit <- as.character(unit)  # Convert numeric to character
     } else if (is.character(unit)) {
@@ -256,20 +262,14 @@ convert_unit <- function(unit, t) {
     } else if (is.list(unit) || is.vector(unit)) {
       unit <- as.character(unlist(unit))  # Flatten list/vector and convert to character
     }
-
-    # Collapse into a comma-separated string if the length is greater than 1
-    unit <- paste(unit, collapse = ",")
+    unit <- paste(unit, collapse = ",")  # Collapse into a comma-separated string
 
   } else if (t == 2) {
-    # Handle comma-separated strings and lists
-    if (is.character(unit)) {
-      unit <- strsplit(unit, ",")[[1]]  # Split by comma if it's a string
+    if (is.character(unit) && length(unit) == 1) {
+      unit <- strsplit(unit, ",")[[1]]  # Only split if it's a single string
     } else if (is.list(unit) || is.vector(unit)) {
       unit <- as.character(unlist(unit))  # Convert lists or vectors to character
     }
-
-    # Convert to character
-    unit <- as.character(unit)
   }
 
   return(unit)
@@ -301,7 +301,7 @@ eval_gfparam <- function(data, start_date, end_date, cutoff) {
   # Define the parameter space for param1 (i), param2 (j), and min_time (k):
   i <- seq(1, 5)
   j <- seq(1, 7)
-  k <- seq(2, 4)
+  k <- seq(2, 3)
 
   # Generate all combinations of i, j, and k
   param_combinations <- expand.grid(param1 = i, param2 = j, min_time = k)

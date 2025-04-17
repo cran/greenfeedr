@@ -8,13 +8,13 @@
 #' @param user a character string representing the user name to logging into 'GreenFeed' system
 #' @param pass a character string representing password to logging into 'GreenFeed' system
 #' @param unit numeric or character vector or list representing one or more GreenFeed unit numbers.
-#' @param start_date a character string representing the start date of the study (format: "dmy")
-#' @param end_date a character string representing the end date of the study (format: "dmy")
+#' @param start_date a character string representing the start date of the study (format: "DD-MM-YY" or "YYYY-MM-DD")
+#' @param end_date a character string representing the end date of the study (format: "DD-MM-YY" or "YYYY-MM-DD")
 #' @param rfid_file a character string representing the file with individual RFIDs. The order should be Visual ID (col1) and RFID (col2)
 #' @param file_path a character string or list representing files(s) with feedtimes from 'C-Lock Inc.'
 #'
 #' @return A list of two data frames:
-#'   \item{visits_per_unit }{Data frame with daily processed 'GreenFeed' data, including columns for VisualID, Date, Time, number of drops, and visits.}
+#'   \item{visits_per_day }{Data frame with daily processed 'GreenFeed' data, including columns for VisualID, Date, Time, number of drops, and visits.}
 #'   \item{visits_per_animal }{Data frame with weekly processed 'GreenFeed' data, including columns for VisualID, total drops, total visits, mean drops, and mean visits.}
 #'
 #'
@@ -46,7 +46,7 @@
 #' @import utils
 
 utils::globalVariables(c(
-  "FID", "FeedTime", "CowTag", "Date", "visits",
+  "FID", "FeedTime", "CowTag", "Date", "visits", "Foodtype",
   "Time", "CurrentPeriod", "ndrops", "Date", "FarmName"
 ))
 
@@ -103,6 +103,7 @@ viseat <- function(user = NA, pass = NA, unit,
       )
   } else {
 
+    file_path <- normalizePath(file_path, mustWork = FALSE) # Convert to absolute path
     ext <- tools::file_ext(file_path)
     if (ext == "csv") {
       # Read CSV file
@@ -141,16 +142,75 @@ viseat <- function(user = NA, pass = NA, unit,
   # Process the rfid data
   rfid_file <- process_rfid_data(rfid_file)
 
-  if (is.null(rfid_file)) {
-    message("RFID data could not be processed. Exiting function.")
-    return(NULL)
+  # If rfid_file provided, filter and get animal ID not visiting the 'GreenFeed' units
+  if (!is.null(rfid_file)){
+    df <- df[df$CowTag %in% rfid_file$RFID, ]
+    noGFvisits <- rfid_file$FarmName[!(rfid_file$RFID %in% df$CowTag)]
+
+    message(paste("Animal IDs not visiting GF:", paste(noGFvisits, collapse = ", ")))
+
+    # Create a data frame with number of drops and visits per day per animal
+    daily_visits <- df %>%
+      dplyr::inner_join(rfid_file[, 1:2], by = c("CowTag" = "RFID")) %>%
+      dplyr::mutate(
+        # Convert FeedTime to POSIXct with the correct format
+        FeedTime = as.POSIXct(FeedTime, format = "%m/%d/%y %H:%M", tz = "UTC"),
+        Date = as.character(as.Date(FeedTime)),
+        Time = as.numeric(lubridate::period_to_seconds(lubridate::hms(format(FeedTime, "%H:%M:%S"))) / 3600),
+        FoodType = as.character(FoodType)
+      ) %>%
+      dplyr::relocate(Date, Time, FarmName, .after = FID) %>%
+      dplyr::select(-FeedTime) %>%
+      # Number of drops per cow per day
+      dplyr::group_by(FarmName, Date, FoodType) %>%
+      dplyr::summarise(
+        ndrops = dplyr::n(),
+        visits = max(CurrentPeriod)
+      )
+
+    # Calculate the number of drops and visits per animal
+    animal_visits <- daily_visits %>%
+      dplyr::group_by(FarmName, FoodType) %>%
+      dplyr::mutate(visits = as.numeric(visits)) %>%
+      dplyr::summarise(
+        total_drops = sum(ndrops),
+        total_visits = sum(visits),
+        mean_drops = round(mean(ndrops), 2),
+        mean_visits = round(mean(visits), 2)
+      )
+
+  } else {
+
+    # Create a data frame with number of drops and visits per day per animal
+    daily_visits <- df %>%
+      dplyr::mutate(
+        # Convert FeedTime to POSIXct with the correct format
+        FeedTime = as.POSIXct(FeedTime, format = "%m/%d/%y %H:%M", tz = "UTC"),
+        Date = as.character(as.Date(FeedTime)),
+        Time = as.numeric(lubridate::period_to_seconds(lubridate::hms(format(FeedTime, "%H:%M:%S"))) / 3600),
+        FoodType = as.character(FoodType)
+      ) %>%
+      dplyr::relocate(Date, Time, RFID = CowTag, .after = FID) %>%
+      dplyr::select(-FeedTime) %>%
+      # Number of drops per cow per day
+      dplyr::group_by(RFID, Date, FoodType) %>%
+      dplyr::summarise(
+        ndrops = dplyr::n(),
+        visits = max(CurrentPeriod)
+      )
+
+    # Calculate the number of drops and visits per animal
+    animal_visits <- daily_visits %>%
+      dplyr::group_by(RFID, FoodType) %>%
+      dplyr::mutate(visits = as.numeric(visits)) %>%
+      dplyr::summarise(
+        total_drops = sum(ndrops),
+        total_visits = sum(visits),
+        mean_drops = round(mean(ndrops), 2),
+        mean_visits = round(mean(visits), 2)
+      )
   }
 
-  # If rfid_file provided, filter and get animal ID not visiting the 'GreenFeed' units
-  df <- df[df$CowTag %in% rfid_file$RFID, ]
-  noGFvisits <- rfid_file$FarmName[!(rfid_file$RFID %in% df$CowTag)]
-
-  message(paste("Animal IDs not visiting GF:", paste(noGFvisits, collapse = ", ")))
 
   # Plot the visits per unit
   plotFID <- df %>%
@@ -172,39 +232,10 @@ viseat <- function(user = NA, pass = NA, unit,
     )
   print(plotFID)
 
-  # Create a data frame with number of drops and visits per day per animal
-  daily_visits <- df %>%
-    dplyr::inner_join(rfid_file[, 1:2], by = c("CowTag" = "RFID")) %>%
-    dplyr::mutate(
-      # Convert FeedTime to POSIXct with the correct format
-      FeedTime = as.POSIXct(FeedTime, format = "%m/%d/%y %H:%M", tz = "UTC"),
-      Date = as.character(as.Date(FeedTime)),
-      Time = as.numeric(lubridate::period_to_seconds(lubridate::hms(format(FeedTime, "%H:%M:%S"))) / 3600)
-    ) %>%
-    dplyr::relocate(Date, Time, FarmName, .after = FID) %>%
-    dplyr::select(-FeedTime) %>%
-    # Number of drops per cow per day
-    dplyr::group_by(FarmName, Date) %>%
-    dplyr::summarise(
-      ndrops = dplyr::n(),
-      visits = max(CurrentPeriod)
-    )
-
-  # Calculate the number of drops and visits per animal
-  animal_visits <- daily_visits %>%
-    dplyr::group_by(FarmName) %>%
-    dplyr::mutate(visits = as.numeric(visits)) %>%
-    dplyr::summarise(
-      total_drops = sum(ndrops),
-      total_visits = sum(visits),
-      mean_drops = round(mean(ndrops), 2),
-      mean_visits = round(mean(visits), 2)
-    )
-
 
   # Return a list of data frames
   return(list(
-    visits_per_unit = daily_visits,
+    visits_per_day = daily_visits,
     visits_per_animal = animal_visits
   ))
 

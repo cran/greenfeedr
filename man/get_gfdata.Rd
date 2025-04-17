@@ -8,6 +8,7 @@ get_gfdata(
   user,
   pass,
   d = "visits",
+  type = 2,
   exp = NA,
   unit,
   start_date,
@@ -22,13 +23,15 @@ get_gfdata(
 
 \item{d}{a character string representing data type to download (opts: "visits", "feed", "rfid", "cmds")}
 
+\item{type}{a numeric representing the type of data to retrieve (1=finalized and 2=preliminary)}
+
 \item{exp}{a character string representing study name or other study identifier. It is used as file name to save the data}
 
 \item{unit}{numeric or character vector, or a list representing one or more 'GreenFeed' unit numbers}
 
-\item{start_date}{a character string representing the start date of the study (format: "dmy")}
+\item{start_date}{a character string representing the start date of the study (format: "DD-MM-YY" or "YYYY-MM-DD")}
 
-\item{end_date}{a character string representing the end date of the study (format: "dmy")}
+\item{end_date}{a character string representing the end date of the study (format: "DD-MM-YY" or "YYYY-MM-DD")}
 
 \item{save_dir}{a character string representing the directory to save the output file}
 }
@@ -50,6 +53,7 @@ get_gfdata(
   user = "your_username",
   pass = "your_password",
   d = "visits",
+  type = 2,
   exp = "StudyName",
   unit = c(304, 305),
   start_date = "2024-01-01",
